@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 700" font-family="Arial, sans-serif">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FAFAFA"/>
+      <stop offset="100%" stop-color="#EAEAEA"/>
+    </linearGradient>
+    <filter id="shadow" x="-2%" y="-2%" width="104%" height="104%">
+      <feGaussianBlur in="SourceAlpha" stdDeviation="3"/>
+      <feOffset dx="0" dy="2"/>
+      <feComponentTransfer><feFuncA type="linear" slope="0.2"/></feComponentTransfer>
+      <feMerge><feMergeNode/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+    <pattern id="textbar" x="0" y="0" width="6" height="4" patternUnits="userSpaceOnUse">
+      <rect width="6" height="4" fill="#444"/>
+    </pattern>
+    <pattern id="hbar" x="0" y="0" width="1" height="1" patternUnits="userSpaceOnUse">
+      <rect width="1" height="1" fill="#444"/>
+    </pattern>
+  </defs>
+
+  <rect width="1200" height="700" fill="url(#bgGrad)"/>
+
+  <!-- Title -->
+  <text x="600" y="40" font-size="22" font-weight="700" fill="#1F3864" text-anchor="middle">
+    claude-arabic-docs — what the skill fixes
+  </text>
+  <text x="600" y="65" font-size="13" fill="#595959" text-anchor="middle">
+    How a programmatically-generated Arabic .docx renders in MS Word — before vs after
+  </text>
+  <text x="600" y="83" font-size="11" fill="#999" text-anchor="middle" font-style="italic">
+    (Arabic text shown as schematic bars — only the alignment pattern matters)
+  </text>
+
+  <!-- BEFORE panel -->
+  <g transform="translate(40, 110)">
+    <rect width="540" height="560" rx="8" fill="#FFFFFF" stroke="#C00000" stroke-width="2" filter="url(#shadow)"/>
+    <rect width="540" height="38" rx="8" fill="#C00000"/>
+    <rect y="20" width="540" height="18" fill="#C00000"/>
+    <text x="20" y="25" font-size="14" font-weight="700" fill="#FFFFFF">BEFORE</text>
+    <text x="520" y="25" font-size="11" fill="#FFE4E4" text-anchor="end">opened in MS Word → broken</text>
+
+    <g transform="translate(20, 60)">
+      <!-- Title (centered, OK) -->
+      <rect x="190" y="10" width="120" height="14" fill="#1F3864" opacity="0.7"/>
+      <text x="250" y="46" font-size="10" fill="#1F3864" text-anchor="middle" font-style="italic">Title (centered) — OK</text>
+
+      <!-- H1 — LEFT ALIGNED (bug!) -->
+      <rect x="0" y="70" width="160" height="11" fill="#1F3864"/>
+      <text x="0" y="95" font-size="10" fill="#C00000" font-style="italic">← H1 heading hugs left margin (BUG)</text>
+
+      <!-- Body — LEFT ALIGNED (bug!) lines -->
+      <rect x="0" y="115" width="450" height="6" fill="#444"/>
+      <rect x="0" y="125" width="430" height="6" fill="#444"/>
+      <rect x="0" y="135" width="320" height="6" fill="#444"/>
+      <text x="0" y="155" font-size="10" fill="#C00000" font-style="italic">← Body wraps from left edge (BUG)</text>
+
+      <!-- Table — actually correct (only thing that works in this version) -->
+      <g transform="translate(0, 175)">
+        <rect width="500" height="100" fill="none" stroke="#999" stroke-width="0.5"/>
+        <line x1="170" y1="0" x2="170" y2="100" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="25" x2="500" y2="25" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="50" x2="500" y2="50" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="75" x2="500" y2="75" stroke="#999" stroke-width="0.5"/>
+        <rect x="330" width="170" height="100" fill="#F2F2F2"/>
+        <!-- Right column = labels -->
+        <rect x="430" y="9" width="60" height="8" fill="#1F3864"/>
+        <rect x="430" y="34" width="60" height="8" fill="#444"/>
+        <rect x="430" y="59" width="60" height="8" fill="#444"/>
+        <rect x="430" y="84" width="60" height="8" fill="#444"/>
+        <!-- Left column = values -->
+        <rect x="110" y="9" width="50" height="8" fill="#1F3864"/>
+        <rect x="60" y="34" width="100" height="8" fill="#444"/>
+        <rect x="40" y="59" width="120" height="8" fill="#444"/>
+        <rect x="70" y="84" width="90" height="8" fill="#444"/>
+      </g>
+      <text x="500" y="290" font-size="10" fill="#548235" font-style="italic" text-anchor="end">✓ Table correctly RTL (only via bidiVisual)</text>
+
+      <!-- Bullet list — LEFT ALIGNED (bug!) -->
+      <circle cx="6" cy="318" r="2.5" fill="#444"/><rect x="14" y="314" width="180" height="6" fill="#444"/>
+      <circle cx="6" cy="335" r="2.5" fill="#444"/><rect x="14" y="331" width="220" height="6" fill="#444"/>
+      <circle cx="6" cy="352" r="2.5" fill="#444"/><rect x="14" y="348" width="160" height="6" fill="#444"/>
+      <text x="0" y="375" font-size="10" fill="#C00000" font-style="italic">← Bullets on the wrong side (BUG)</text>
+
+      <!-- More body — LEFT ALIGNED -->
+      <rect x="0" y="395" width="440" height="6" fill="#444"/>
+      <rect x="0" y="405" width="380" height="6" fill="#444"/>
+      <text x="0" y="425" font-size="10" fill="#C00000" font-style="italic">← Still hugging left margin (BUG)</text>
+
+      <!-- Summary box -->
+      <g transform="translate(0, 450)">
+        <rect width="500" height="34" fill="#FFE4E4" rx="4"/>
+        <text x="250" y="22" font-size="11" font-weight="700" fill="#C00000" text-anchor="middle">
+          Headings + body + bullets left-aligned. Only tables OK.
+        </text>
+      </g>
+    </g>
+  </g>
+
+  <!-- AFTER panel -->
+  <g transform="translate(620, 110)">
+    <rect width="540" height="560" rx="8" fill="#FFFFFF" stroke="#548235" stroke-width="2" filter="url(#shadow)"/>
+    <rect width="540" height="38" rx="8" fill="#548235"/>
+    <rect y="20" width="540" height="18" fill="#548235"/>
+    <text x="20" y="25" font-size="14" font-weight="700" fill="#FFFFFF">AFTER</text>
+    <text x="520" y="25" font-size="11" fill="#E4F4DC" text-anchor="end">six-layer hardening → correct in Word</text>
+
+    <g transform="translate(20, 60)">
+      <!-- Title (centered, OK) -->
+      <rect x="190" y="10" width="120" height="14" fill="#1F3864" opacity="0.7"/>
+      <text x="250" y="46" font-size="10" fill="#1F3864" text-anchor="middle" font-style="italic">Title (centered) — OK</text>
+
+      <!-- H1 — RIGHT ALIGNED -->
+      <rect x="340" y="70" width="160" height="11" fill="#1F3864"/>
+      <text x="500" y="95" font-size="10" fill="#548235" font-style="italic" text-anchor="end">H1 heading on right margin ✓</text>
+
+      <!-- Body — RIGHT ALIGNED -->
+      <rect x="50" y="115" width="450" height="6" fill="#444"/>
+      <rect x="70" y="125" width="430" height="6" fill="#444"/>
+      <rect x="180" y="135" width="320" height="6" fill="#444"/>
+      <text x="500" y="155" font-size="10" fill="#548235" font-style="italic" text-anchor="end">Body wraps from right edge ✓</text>
+
+      <!-- Table — RTL (correct) -->
+      <g transform="translate(0, 175)">
+        <rect width="500" height="100" fill="none" stroke="#999" stroke-width="0.5"/>
+        <line x1="330" y1="0" x2="330" y2="100" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="25" x2="500" y2="25" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="50" x2="500" y2="50" stroke="#999" stroke-width="0.5"/>
+        <line x1="0" y1="75" x2="500" y2="75" stroke="#999" stroke-width="0.5"/>
+        <rect x="330" width="170" height="100" fill="#F2F2F2"/>
+        <rect x="430" y="9" width="60" height="8" fill="#1F3864"/>
+        <rect x="430" y="34" width="60" height="8" fill="#444"/>
+        <rect x="430" y="59" width="60" height="8" fill="#444"/>
+        <rect x="430" y="84" width="60" height="8" fill="#444"/>
+        <rect x="270" y="9" width="50" height="8" fill="#1F3864"/>
+        <rect x="220" y="34" width="100" height="8" fill="#444"/>
+        <rect x="200" y="59" width="120" height="8" fill="#444"/>
+        <rect x="230" y="84" width="90" height="8" fill="#444"/>
+      </g>
+      <text x="500" y="290" font-size="10" fill="#548235" font-style="italic" text-anchor="end">✓ Table correctly RTL</text>
+
+      <!-- Bullet list — RIGHT ALIGNED -->
+      <rect x="306" y="314" width="180" height="6" fill="#444"/><circle cx="494" cy="318" r="2.5" fill="#444"/>
+      <rect x="266" y="331" width="220" height="6" fill="#444"/><circle cx="494" cy="335" r="2.5" fill="#444"/>
+      <rect x="326" y="348" width="160" height="6" fill="#444"/><circle cx="494" cy="352" r="2.5" fill="#444"/>
+      <text x="500" y="375" font-size="10" fill="#548235" font-style="italic" text-anchor="end">Bullets on the right ✓</text>
+
+      <!-- More body — RIGHT ALIGNED -->
+      <rect x="60" y="395" width="440" height="6" fill="#444"/>
+      <rect x="120" y="405" width="380" height="6" fill="#444"/>
+      <text x="500" y="425" font-size="10" fill="#548235" font-style="italic" text-anchor="end">Aligned to right margin ✓</text>
+
+      <!-- Summary box -->
+      <g transform="translate(0, 450)">
+        <rect width="500" height="34" fill="#E4F4DC" rx="4"/>
+        <text x="250" y="22" font-size="11" font-weight="700" fill="#548235" text-anchor="middle">
+          All paragraphs right-aligned. RTL pipeline engaged in Word.
+        </text>
+      </g>
+    </g>
+  </g>
+
+  <!-- Footer -->
+  <text x="600" y="687" font-size="10" fill="#999" text-anchor="middle">
+    The skill injects 6 XML layers across styles.xml, settings.xml, and document.xml that MS Word actually checks.
+  </text>
+</svg>
