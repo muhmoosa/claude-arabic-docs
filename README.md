@@ -64,6 +64,12 @@ python scripts/harden_rtl.py input.docx -o output.docx
 # Verbose report of what changed
 python scripts/harden_rtl.py document.docx --report
 
+# Validate content-level RTL rules — exit 1 on errors (catches jc=right, mixed runs, etc.)
+python scripts/harden_rtl.py document.docx --validate
+
+# Validate and auto-rewrite jc="right" → "start" where it's unambiguously safe
+python scripts/harden_rtl.py document.docx --validate --fix-jc
+
 # Use a different RTL locale
 python scripts/harden_rtl.py document.docx --locale he-IL   # Hebrew
 python scripts/harden_rtl.py document.docx --locale fa-IR   # Persian
@@ -109,8 +115,10 @@ claude-arabic-docs/
 ├── LICENSE                        MIT
 ├── CHANGELOG.md                   Discovery history of each rule
 ├── scripts/
-│   ├── harden_rtl.py              Post-process any .docx — apply all 6 layers
+│   ├── harden_rtl.py              Post-process any .docx — apply all 6 layers + --validate
 │   └── arabic_numerals.py         Convert Western digits + Latin punct to Arabic forms
+├── references/
+│   └── python-docx-template.md    Known-good python-docx helper layer (rules 1–8 by construction)
 └── examples/
     ├── build_test_arabic.js       Minimal docx-js example using the skill conventions
     └── sample-output.docx         The generated test document

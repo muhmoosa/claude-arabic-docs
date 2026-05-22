@@ -64,6 +64,12 @@ python scripts/harden_rtl.py input.docx -o output.docx
 # تقرير مفصَّل عمَّا تغيَّر
 python scripts/harden_rtl.py document.docx --report
 
+# فحص قواعد RTL على مستوى المحتوى — يُنهي بالرمز 1 عند وجود أخطاء
+python scripts/harden_rtl.py document.docx --validate
+
+# الفحص مع إعادة كتابة jc="right" إلى "start" حيث يكون ذلك آمناً بلا لبس
+python scripts/harden_rtl.py document.docx --validate --fix-jc
+
 # لغة RTL مختلفة
 python scripts/harden_rtl.py document.docx --locale he-IL   # عبرية
 python scripts/harden_rtl.py document.docx --locale fa-IR   # فارسية
@@ -109,8 +115,10 @@ claude-arabic-docs/
 ├── LICENSE                        MIT
 ├── CHANGELOG.md                   تاريخ اكتشاف كل قاعدة
 ├── scripts/
-│   ├── harden_rtl.py              معالجة لاحقة لأي .docx — تطبق الطبقات الست
+│   ├── harden_rtl.py              معالجة لاحقة لأي .docx — تطبق الطبقات الست + وضع الفحص --validate
 │   └── arabic_numerals.py         تحويل الأرقام الغربية والترقيم اللاتيني إلى صيغ عربية
+├── references/
+│   └── python-docx-template.md    طبقة مساعِدة جاهزة لـ python-docx (تُطبّق القواعد ١–٨ بالبناء)
 └── examples/
     ├── build_test_arabic.js       مثال docx-js يستخدم أعراف الإضافة
     └── sample-output.docx         المستند التجريبي المولَّد

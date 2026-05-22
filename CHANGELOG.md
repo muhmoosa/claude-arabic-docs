@@ -5,6 +5,28 @@ a real Arabic Word document, and a human had to manually correct it in MS Word.
 Diffing the manually-fixed file against the programmatically-generated one
 revealed the missing piece. Each rule is documented in detail in `SKILL.md`.
 
+## v1.1 — 2026-05-22
+
+Follow-up after a real failure case: a generator produced a multi-page Arabic
+document that passed the structural harden and looked correct in the LibreOffice
+PDF preview, yet still violated three content-level rules and rendered wrong in
+Word. The structural fixes can't catch those, so this release adds a validator
+and a python-docx reference, and documents the python-docx alignment trap.
+
+### Added
+
+| Area | Change |
+|---|---|
+| `scripts/harden_rtl.py` | New `--validate` mode flags content-level rule violations (rules 5, 7, 8): a `bidi` paragraph using `jc="right"`, a single run mixing Arabic + Latin letters (errors), and Latin digits / trailing Latin punctuation in RTL runs (warnings). Exits 1 on errors. |
+| `scripts/harden_rtl.py` | New opt-in `--fix-jc` rewrites `jc="right"` → `"start"` only in paragraphs that are unambiguously RTL (have `<w:bidi/>`, no LTR runs). Validation scans content parts only, so the deliberate `jc="right"` in document defaults is never a false positive. |
+| `references/python-docx-template.md` | New battle-tested python-docx helper layer (`split_bidi` tokenizer, `add_para`/`add_run`/`make_table_rtl`) that encodes rules 1–8 by construction, plus a worked example. |
+| `SKILL.md` | New "python-docx gotcha" section explaining that `WD_ALIGN_PARAGRAPH` has no `START`, so the natural API emits the buggy `jc="right"`; documents the direct-OOXML workaround. |
+
+### Changed
+
+- `SKILL.md` reference links repointed: the docx-js section now points to the real `examples/build_test_arabic.js`, and the per-language notes are folded inline (the previously-linked `references/docx-js-template.md` and `references/per-language.md` never existed in the repo).
+- README (EN + AR): documented `--validate`/`--fix-jc` and added `references/` to "What's in the box".
+
 ## v1.0 — 2026-05-19
 
 Initial release with six-layer hardening, after six debugging iterations on

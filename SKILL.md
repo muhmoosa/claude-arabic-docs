@@ -150,7 +150,33 @@ That non-intuitive flip is real, undocumented, and Word-version-specific. The re
 | Force LTR (e.g. an Arabic doc's English contact line) | `AlignmentType.LEFT` *plus* set the paragraph and run to LTR (`bidirectional: false`, `rightToLeft: false`) | `<w:jc w:val="left"/>` (no `<w:bidi/>`, no `<w:rtl/>`) |
 | Force right side regardless of direction | `AlignmentType.RIGHT` — only when you really mean physical right | `<w:jc w:val="right"/>` |
 
-The bundled hardening script does **not** rewrite `right` to `start` automatically — that's a content choice, not a layout-bug fix. But if you're generating a new document, default every RTL paragraph to `START`.
+The bundled hardening script does **not** rewrite `right` to `start` as part of the normal harden pass — that's a content choice, not a layout-bug fix. But if you're generating a new document, default every RTL paragraph to `START`. (If you've already produced a file full of `right`, the script's opt-in `--fix-jc` mode will rewrite `right` → `start` for you in the paragraphs where it's unambiguously safe — see "Validate the finished file" below.)
+
+#### python-docx gotcha: there is no `START` alignment
+
+If you generate with **python-docx**, the very first API you reach for writes the *wrong* value. python-docx's `WD_ALIGN_PARAGRAPH` enum only exposes *physical* alignments (`LEFT`, `RIGHT`, `CENTER`, `JUSTIFY`). Setting:
+
+```python
+paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+# emits: <w:jc w:val="right"/>   ← the buggy value per Rule 5
+```
+
+There is no `WD_ALIGN_PARAGRAPH.START`. To emit `<w:jc w:val="start"/>` you must write the OOXML directly:
+
+```python
+from docx.oxml import OxmlElement
+from docx.oxml.ns import qn
+
+def set_jc_start(paragraph):
+    pPr = paragraph._p.get_or_add_pPr()
+    for jc in pPr.findall(qn('w:jc')):
+        pPr.remove(jc)
+    jc = OxmlElement('w:jc')
+    jc.set(qn('w:val'), 'start')
+    pPr.append(jc)
+```
+
+The same is true for the other RTL flags: there is **no** python-docx API for `<w:bidi/>` at all, and the `font.rtl` property (for `<w:rtl/>` on runs) is unreliable across versions. For RTL Arabic documents in python-docx, **assume the OOXML XML layer is your real API** — set `<w:bidi/>`, `<w:jc w:val="start"/>`, and `<w:rtl/>` by writing elements directly. A known-good helper layer that does exactly this is in `references/python-docx-template.md`.
 
 ### 6. Heading styles must carry bidi
 
@@ -222,27 +248,48 @@ Saudi/Gulf business documents conventionally use dual dating: `04 / 01 / 1447 ه
    - Injects `<w:bidi/>` into every paragraph that contains RTL text but lacks the flag.
    - Injects `<w:rtl/>` into every run that contains RTL text but lacks the flag.
    - Leaves explicitly-LTR paragraphs alone (those with `<w:jc w:val="left"/>` *and* no RTL text in their runs).
-4. **Convert to PDF and visually verify** the *first time* you produce a given layout; once the template is known good, you can skip the visual check.
+4. **Validate the finished file** with `python scripts/harden_rtl.py document.docx --validate`. The structural harden pass fixes structure but cannot see *content-level* mistakes — a bidi paragraph that still uses `jc="right"`, a run that mixes Arabic and Latin letters, Latin digits inside an RTL run, or Latin punctuation trailing an RTL run. These render wrong in Word even though a LibreOffice PDF preview looks fine. `--validate` reports them and exits non-zero on errors, so you catch them on the first pass instead of after a user complains.
+5. **Convert to PDF and visually verify** the *first time* you produce a given layout; once the template is known good, you can skip the visual check.
 
 ## Reference: hardening script
 
-The bundled `scripts/harden_rtl.py` takes a `.docx` and produces a hardened copy in-place (or to a new path):
+The bundled `scripts/harden_rtl.py` takes a `.docx` and produces a hardened copy in-place (or to a new path), and also runs a content-level validator:
 
 ```bash
-python scripts/harden_rtl.py path/to/document.docx               # in place
+python scripts/harden_rtl.py path/to/document.docx               # structural harden, in place
 python scripts/harden_rtl.py path/to/in.docx -o path/to/out.docx # to new file
 python scripts/harden_rtl.py path/to/doc.docx --report           # print what it changed
+python scripts/harden_rtl.py path/to/doc.docx --validate         # report content issues, exit 1 on errors
+python scripts/harden_rtl.py path/to/doc.docx --validate --fix-jc # also rewrite right → start where safe
 ```
 
-Read the script's docstring for the exact list of transforms.
+The `--validate` checks (see rules 5, 7, 8):
 
-## Reference: docx-js snippets
+| Severity | What it flags |
+|---|---|
+| **Error** | A paragraph with `<w:bidi/>` that also has `<w:jc w:val="right"/>` (Rule 5 — use `start`). |
+| **Error** | A single run mixing Arabic-script and Latin letters (Rule 7 — split into separate runs). |
+| **Warn** | Latin digits `[0-9]` inside a run flagged `<w:rtl/>` (Rule 8 — prefer Arabic-Indic, unless IBAN/code/URL). |
+| **Warn** | Latin `,` `;` `?` ending an RTL-only run (Rule 8 — use `،` `؛` `؟`). |
 
-A complete docx-js template for an RTL Arabic letter is in `references/docx-js-template.md`. Read it when you're about to generate an Arabic `.docx` and want a known-good starting point.
+`--validate` scans only the content parts (`document.xml`, headers, footers), never `styles.xml`, so the deliberate `<w:jc w:val="right"/>` in the document defaults (Rule 0.5) is not a false positive. `--fix-jc` is opt-in because rewriting `right` → `start` is a content decision; it only touches paragraphs that are unambiguously RTL (have `<w:bidi/>`, no LTR runs). Read the script's docstring for the exact list of transforms.
+
+## Reference: docx-js example
+
+A complete, runnable docx-js example that applies these conventions is in `examples/build_test_arabic.js`. Read it when you're about to generate an Arabic `.docx` with docx-js and want a known-good starting point; run `python scripts/harden_rtl.py examples/sample-output.docx --report` to see the hardening pass on its output.
+
+## Reference: python-docx template
+
+`references/python-docx-template.md` is a battle-tested python-docx helper layer (direct-XML `para_rtl`/`add_run`/`make_table_rtl` helpers, a `split_bidi` tokenizer that splits mixed Arabic+Latin prose into correct runs by construction, and an `add_para` builder) plus a worked example. Read it when generating an Arabic `.docx` from python-docx — it encodes rules 1–8 so you write natural prose and get correct OOXML, sidestepping the `jc="right"` trap described in Rule 5.
 
 ## Reference: language-specific notes
 
-`references/per-language.md` has notes on Arabic (Saudi business conventions, common honorifics, dual dating), Hebrew (calendar formatting, niqqud), Persian (Farsi vs Dari, Persian digits), and Urdu (Nastaliq fonts, Pakistani date conventions). Read it when working in any of those languages.
+Quick per-language notes (see rules 8–10 for the Arabic detail):
+
+- **Arabic** — Saudi/Gulf business writing defaults to Eastern Arabic-Indic digits (٠–٩), Arabic punctuation (`،` `؛` `؟`), and dual Hijri/Gregorian dating with era markers (`هـ` / `م`). Common honorifics: `سعادة`, `المكرم`. Confirm digit style with the user for mixed Arabic/English executive reports.
+- **Hebrew** (`he-IL`) — uses Western (Latin) digits; no Arabic-Indic conversion. Niqqud (vowel points) are optional and combine with consonants — keep them in the same run. Hebrew calendar dates are usually written out, not numeric.
+- **Persian/Farsi** (`fa-IR`) — uses Persian digits (۰۱۲۳۴۵۶۷۸۹, U+06F0–U+06F9), which differ from Arabic-Indic for ٤/۴, ٥/۵, ٦/۶. Dari (`fa-AF`) follows Arabic-Indic. Persian is RTL like Arabic but is *not* Arabic — set the locale accordingly.
+- **Urdu** (`ur-PK`) — prefers a Nastaliq font (e.g. *Jameel Noori Nastaleeq*, *Noto Nastaliq Urdu*) over Naskh; Arial will render but flatten the script's vertical stacking. Pakistani dates are typically `dd/mm/yyyy` Gregorian.
 
 ## A few things that look like bugs but aren't
 
