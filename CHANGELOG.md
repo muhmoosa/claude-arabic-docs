@@ -5,6 +5,13 @@ a real Arabic Word document, and a human had to manually correct it in MS Word.
 Diffing the manually-fixed file against the programmatically-generated one
 revealed the missing piece. Each rule is documented in detail in `SKILL.md`.
 
+## v1.1.1 — 2026-05-22
+
+Renamed the skill's `name:` field from `claude-arabic-docs` to `arabic-rtl-docs`:
+skill names may not contain the reserved word "claude", so the previous name was
+rejected at install time. No functional changes — the repository, README, and the
+`.skill` filename are unaffected; only the installed skill identifier changed.
+
 ## v1.1 — 2026-05-22
 
 Follow-up after a real failure case: a generator produced a multi-page Arabic
