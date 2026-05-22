@@ -130,8 +130,8 @@ claude-arabic-docs/
 git clone https://github.com/<your-username>/claude-arabic-docs
 cd claude-arabic-docs
 
-# Pack the .skill file (it's a plain ZIP with the SKILL.md and scripts)
-python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/
+# Pack the .skill file (it's a plain ZIP with the SKILL.md, scripts, and references)
+python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
 
 # Test that the hardening script runs
 python scripts/harden_rtl.py examples/sample-output.docx --report

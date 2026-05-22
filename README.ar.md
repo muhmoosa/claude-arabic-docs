@@ -130,8 +130,8 @@ claude-arabic-docs/
 git clone https://github.com/<your-username>/claude-arabic-docs
 cd claude-arabic-docs
 
-# حزم ملف .skill (هو فقط ZIP عادي يحتوي SKILL.md والسكربتات)
-python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/
+# حزم ملف .skill (هو فقط ZIP عادي يحتوي SKILL.md والسكربتات والمراجع)
+python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
 
 # اختبار تشغيل سكربت التقوية
 python scripts/harden_rtl.py examples/sample-output.docx --report
