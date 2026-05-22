@@ -25,11 +25,22 @@ left-to-right. This script patches the file:
 
 The script is idempotent — running it twice is a no-op on the second pass.
 
+It also offers a separate --validate mode that catches *content-level* RTL
+mistakes the structural hardening can't auto-fix (see SKILL.md rules 5, 7, 8):
+a paragraph that is bidi but uses jc="right" instead of "start", a single run
+that mixes Arabic and Latin letters, Latin digits inside an RTL run, and Latin
+punctuation trailing an RTL-only run. These pass silently in a LibreOffice PDF
+preview but still render wrong in MS Word. --validate reports them and exits 1
+on errors; the opt-in --fix-jc rewrites jc="right" -> "start" where it is
+unambiguously safe to do so.
+
 Usage:
-    python harden_rtl.py document.docx                       # in place
+    python harden_rtl.py document.docx                       # in place (structural harden)
     python harden_rtl.py in.docx -o out.docx                 # to new file
     python harden_rtl.py doc.docx --report                   # show what changed
     python harden_rtl.py doc.docx --locale he-IL             # Hebrew instead of Arabic
+    python harden_rtl.py doc.docx --validate                 # report content issues, exit 1 on errors
+    python harden_rtl.py doc.docx --validate --fix-jc        # also rewrite right -> start where safe
 
 Dependencies: standard library only.
 """
@@ -805,11 +816,196 @@ def harden_docx(in_path: Path, out_path: Path | None = None, *, locale: str = "a
     return report
 
 
+# ---------- Content-level validation (SKILL.md rules 5, 7, 8) ----------
+#
+# harden_docx() fixes *structural* OOXML (themeFontLang, docDefaults, section
+# bidi, table bidiVisual, paragraph bidi, run rtl). That is necessary but not
+# sufficient: a generator can still emit content-level mistakes that render
+# wrong in Word even when the structure is perfect. Those mistakes pass
+# silently because LibreOffice's PDF preview infers direction from the runs and
+# looks fine. The validator below catches them.
+#
+# Scope: only the content parts (document.xml, header*.xml, footer*.xml).
+# styles.xml is deliberately NOT scanned. The document defaults legitimately
+# carry <w:jc w:val="right"/> per SKILL.md rule 0.5 (the harden step injects it
+# there on purpose), so flagging those would be a false positive. Rule 5's
+# "use start, not right" applies to *body* paragraphs, which live in the
+# content parts.
+
+_LATIN_LETTER_RE = re.compile(r"[A-Za-z]")
+_LATIN_DIGIT_RE = re.compile(r"[0-9]")
+_TRAILING_LATIN_PUNCT = (",", ";", "?")
+
+_PPR_BLOCK_RE = re.compile(r"<w:pPr\b[^>]*>.*?</w:pPr>|<w:pPr\b[^>]*?/>", re.DOTALL)
+_SECTPR_BLOCK_RE = re.compile(r"<w:sectPr\b[^>]*>.*?</w:sectPr>", re.DOTALL)
+_JC_RIGHT_RE = re.compile(r'<w:jc\b[^>]*\bw:val="right"[^>]*/>')
+
+
+@dataclass
+class Issue:
+    severity: str  # "ERROR" or "WARN"
+    code: str      # short, machine-readable
+    message: str
+    where: str = ""
+
+    def __str__(self) -> str:
+        loc = f"  [{self.where}]" if self.where else ""
+        return f"{self.severity:5s} {self.code}: {self.message}{loc}"
+
+
+def _has_latin_letter(text: str) -> bool:
+    return bool(_LATIN_LETTER_RE.search(text))
+
+
+def _run_has_rtl_flag(r_xml: str) -> bool:
+    return "<w:rtl/>" in r_xml or "<w:rtl " in r_xml
+
+
+def _paragraph_pPr(p_xml: str) -> str:
+    """Return the paragraph's own <w:pPr> block with any nested <w:sectPr>
+    stripped, so a section's bidi/jc is never mistaken for the paragraph's.
+    (jc never appears inside a sectPr, so removing it is safe for our checks.)
+    """
+    m = _PPR_BLOCK_RE.search(p_xml)
+    if not m:
+        return ""
+    return _SECTPR_BLOCK_RE.sub("", m.group(0))
+
+
+def _ppr_has_bidi(ppr: str) -> bool:
+    return "<w:bidi/>" in ppr or "<w:bidi " in ppr
+
+
+def _validate_xml(xml: str, fname: str) -> list[Issue]:
+    """Run the content-level checks over one OOXML part. Pure read-only."""
+    issues: list[Issue] = []
+
+    # Rule 5 — a paragraph that is bidi but pins alignment to physical "right".
+    # Word (notably Word for Mac) can re-interpret "right" as the logical end,
+    # which in RTL is the LEFT side. Use logical "start" instead.
+    for _, _, p_xml in _iter_blocks(xml, "w:p", "w:p"):
+        ppr = _paragraph_pPr(p_xml)
+        if _ppr_has_bidi(ppr) and _JC_RIGHT_RE.search(ppr):
+            snippet = "".join(_W_T_RE.findall(p_xml))[:40]
+            issues.append(Issue(
+                "ERROR", "jc-right-in-rtl",
+                'bidi paragraph uses jc="right"; use jc="start"',
+                f"{fname}: {snippet!r}"))
+
+    # Rules 7 & 8 — per-run content checks.
+    for _, _, r_xml in _iter_blocks(xml, "w:r", "w:r"):
+        text = _run_text(r_xml)
+        if not text:
+            continue
+        has_rtl = _has_rtl(text)
+        has_lat = _has_latin_letter(text)
+
+        # Rule 7 — one run mixing RTL script and Latin letters reorders inside
+        # the run. Each script needs its own run.
+        if has_rtl and has_lat:
+            issues.append(Issue(
+                "ERROR", "mixed-script-run",
+                f"run mixes RTL and Latin letters; split into separate runs: {text[:50]!r}",
+                fname))
+
+        # Rule 8 — Latin digits inside an RTL-flagged run. Fine for
+        # IBANs/codes/URLs (which belong in their own LTR run anyway), so this
+        # is a warning, not an error.
+        if _run_has_rtl_flag(r_xml) and _LATIN_DIGIT_RE.search(text):
+            issues.append(Issue(
+                "WARN", "latin-digits-in-rtl",
+                f"Latin digits in an RTL run; prefer Arabic-Indic ٠-٩ "
+                f"unless this is an IBAN/code/URL: {text[:50]!r}",
+                fname))
+
+        # Rule 8 — RTL-only run ending in Latin , ; ? — should be Arabic , ; ?.
+        if has_rtl and not has_lat:
+            stripped = text.rstrip()
+            if stripped and stripped[-1] in _TRAILING_LATIN_PUNCT:
+                issues.append(Issue(
+                    "WARN", "latin-punct-in-rtl",
+                    f"RTL run ends with Latin punctuation; use ، ؛ ؟: {text[:50]!r}",
+                    fname))
+
+    return issues
+
+
+def _fix_jc_in_xml(xml: str) -> tuple[str, int]:
+    """Rewrite <w:jc w:val="right"/> -> "start" only in paragraphs that are
+    unambiguously RTL: the pPr has <w:bidi/>, and every text-bearing run is
+    RTL-flagged (no LTR runs). Mixed paragraphs are left untouched — rewriting
+    those is a content decision, not a safe mechanical fix.
+    """
+
+    def _xform_p(p_xml: str) -> tuple[str, bool]:
+        ppr = _paragraph_pPr(p_xml)
+        if not _ppr_has_bidi(ppr) or not _JC_RIGHT_RE.search(ppr):
+            return p_xml, False
+        # Bail if any text-bearing run lacks <w:rtl/> (i.e. an LTR run).
+        for _, _, r_xml in _iter_blocks(p_xml, "w:r", "w:r"):
+            if _run_text(r_xml).strip() and not _run_has_rtl_flag(r_xml):
+                return p_xml, False
+        # jc never lives in a sectPr, so we can rewrite directly in the
+        # original (un-stripped) pPr block.
+        m = _PPR_BLOCK_RE.search(p_xml)
+        if not m:
+            return p_xml, False
+        new_block, n = _JC_RIGHT_RE.subn(
+            lambda mm: mm.group(0).replace('w:val="right"', 'w:val="start"'),
+            m.group(0), count=1)
+        if n == 0:
+            return p_xml, False
+        return p_xml[: m.start()] + new_block + p_xml[m.end():], True
+
+    return _replace_blocks(xml, "w:p", "w:p", _xform_p)
+
+
+def validate_docx(
+    in_path: Path, out_path: Path | None = None, *, fix_jc: bool = False
+) -> tuple[list[Issue], int]:
+    """Validate content-level RTL rules. If fix_jc is set, first rewrite safe
+    jc="right" -> "start" (writing to out_path or in place), then validate the
+    result. Returns (issues, jc_fix_count).
+    """
+    in_path = Path(in_path)
+    if not in_path.exists():
+        raise FileNotFoundError(in_path)
+
+    fix_count = 0
+    scan_path = in_path
+
+    if fix_jc:
+        target = out_path or in_path
+        with tempfile.TemporaryDirectory() as tmp:
+            scratch = Path(tmp) / "scratch.docx"
+            with zipfile.ZipFile(in_path, "r") as zin, zipfile.ZipFile(
+                scratch, "w", compression=zipfile.ZIP_DEFLATED
+            ) as zout:
+                for info in zin.infolist():
+                    data = zin.read(info.filename)
+                    if _is_target_file(info.filename):
+                        text, n = _fix_jc_in_xml(data.decode("utf-8"))
+                        fix_count += n
+                        data = text.encode("utf-8")
+                    zout.writestr(info, data)
+            shutil.move(str(scratch), str(target))
+        scan_path = target
+
+    issues: list[Issue] = []
+    with zipfile.ZipFile(scan_path, "r") as z:
+        for info in z.infolist():
+            if _is_target_file(info.filename):
+                text = z.read(info.filename).decode("utf-8")
+                issues.extend(_validate_xml(text, os.path.basename(info.filename)))
+
+    return issues, fix_count
+
+
 # ---------- CLI ----------
 
 def _main() -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("docx", type=Path, help="Path to .docx file to harden")
+    ap.add_argument("docx", type=Path, help="Path to .docx file to harden or validate")
     ap.add_argument("-o", "--output", type=Path, default=None, help="Output path (defaults to in-place)")
     ap.add_argument("--report", action="store_true", help="Print summary of changes")
     ap.add_argument(
@@ -819,7 +1015,36 @@ def _main() -> int:
             f"One of: {', '.join(sorted(_BIDI_LOCALES))}. Default: ar-SA."
         ),
     )
+    ap.add_argument(
+        "--validate", action="store_true",
+        help=(
+            "Validate content-level RTL rules (5, 7, 8) instead of hardening. "
+            "Reports issues and exits 1 if any ERROR is found."
+        ),
+    )
+    ap.add_argument(
+        "--fix-jc", dest="fix_jc", action="store_true",
+        help=(
+            'Opt-in: rewrite <w:jc w:val="right"/> -> "start" in paragraphs that '
+            "are unambiguously RTL (writes the file). Implies validation."
+        ),
+    )
     args = ap.parse_args()
+
+    # Validation / jc-fix mode is separate from structural hardening.
+    if args.validate or args.fix_jc:
+        issues, fix_count = validate_docx(args.docx, args.output, fix_jc=args.fix_jc)
+        if args.fix_jc:
+            print(f'--fix-jc: rewrote {fix_count} jc="right" -> "start" in RTL paragraphs.')
+        errors = [i for i in issues if i.severity == "ERROR"]
+        warns = [i for i in issues if i.severity == "WARN"]
+        if issues:
+            for issue in issues:
+                print(issue)
+        else:
+            print("No content-level RTL issues found.")
+        print(f"\n{len(errors)} error(s), {len(warns)} warning(s).")
+        return 1 if errors else 0
 
     report = harden_docx(args.docx, args.output, locale=args.locale)
 
