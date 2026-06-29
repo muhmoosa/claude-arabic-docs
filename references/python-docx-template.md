@@ -19,14 +19,24 @@ bidi).
 ```python
 """arabic-rtl-docs — python-docx helper layer.
 
-Encodes SKILL.md rules 1-8 so the caller writes natural prose and gets correct
-OOXML. After saving, ALWAYS run:  python harden_rtl.py out.docx
+Encodes SKILL.md rules 1-9.1 so the caller writes natural prose and gets
+correct OOXML. After saving, ALWAYS run:  python harden_rtl.py out.docx
+
+Key behaviors:
+  * split_bidi follows Rule 7.5 — brackets, parens, and quotes stay in the RTL
+    run; only strongly-LTR tokens (Latin letters/digits and URL/IBAN/range
+    punctuation, including an interior en-dash) become LTR runs. So
+    '(10 – 19)' produces one LTR run for '10 – 19' wrapped in RTL '(' / ')'
+    that Word mirrors correctly.
+  * add_run sets font pairing per Rule 9.1 — w:ascii/w:hAnsi = Times New Roman,
+    w:cs = Traditional Arabic. Override per-call with latin_face / cs_face.
 
 Usage:
     from docx import Document
     doc = Document()
     add_heading(doc, "تقرير حالة التطبيق", level=1)
     add_para(doc, "تطبيق Claude Desktop يعتمد على Bun JIT.")   # mixed Ar+Latin auto-split
+    add_para(doc, "النطاق المعتمد (10 – 19) أو (20 فأكثر).")  # brackets stay RTL, range stays LTR
     add_code_block(doc, r"C:\\Users\\me\\claude.exe --debug")
     t = doc.add_table(rows=2, cols=2)
     make_table_rtl(t)
@@ -34,6 +44,8 @@ Usage:
     doc.save("out.docx")
     # then: python harden_rtl.py out.docx --validate
 """
+
+import re
 
 from docx.shared import Pt, RGBColor
 from docx.oxml.ns import qn
@@ -87,57 +99,92 @@ def para_ltr_left(p):
     _set_jc(pPr, "left")
 
 
-# --- bidi tokenizer: solves Rule 7 by construction --------------------------
+# --- bidi tokenizer: solves Rule 7.5 (bracket trap) by construction ---------
 
-_AR_PUNCT = set("،؛؟«»٪٬٫ـ")
-
-
-def _is_arabic_char(c):
-    return 0x0600 <= ord(c) <= 0x06FF or c in _AR_PUNCT
+# A "strongly-LTR segment" per SKILL.md Rule 7.5: starts on a letter or digit,
+# extends through Latin letters/digits and a small set of safe inline tokens
+# (URL/IBAN/path/range characters, including an en-dash), and treats an interior
+# space as part of the segment ONLY when it's followed by another LTR-safe char.
+# Brackets, parentheses, quotes, currency symbols, and all other neutrals are
+# deliberately NOT in this set — they belong in the RTL run so Word's bidi
+# engine mirrors them.
+_LTR_SEG_RE = re.compile(
+    r"[A-Za-z0-9](?:[A-Za-z0-9@._\-/:+%,–]|[ ](?=[A-Za-z0-9@._\-/:+%,–]))*"
+)
 
 
 def split_bidi(text):
-    """Split 'تطبيق Claude يعتمد' into
-    [('تطبيق ', True), ('Claude ', False), ('يعتمد', True)].
+    """Split text into [(segment, is_rtl)] tuples per SKILL.md Rule 7.5.
 
-    Whitespace folds into the preceding segment to avoid empty runs. Latin
-    digits/punctuation count as LTR, so embedded numbers and URLs land in their
-    own runs and keep their order (Rule 7/8). Arabic-Indic digits (٠-٩) are in
-    the Arabic block, so they stay in the RTL run.
+    LTR matches come from _LTR_SEG_RE — they start on a letter/digit and keep
+    going through Latin letters/digits, URL/IBAN punctuation, and an interior
+    en-dash. Everything outside those matches (brackets, quotes, currency
+    symbols, Arabic letters/punctuation) becomes RTL so Word's bidi engine
+    mirrors brackets correctly.
+
+    Examples:
+        'تطبيق Claude يعتمد'   -> [('تطبيق ', True), ('Claude', False), (' يعتمد', True)]
+        '(10 – 19)'             -> [('(', True), ('10 – 19', False), (')', True)]
+        '(20 فأكثر)'             -> [('(', True), ('20', False), (' فأكثر)', True)]
+        'user@example.com'      -> [('user@example.com', False)]
     """
     if not text:
         return []
-    out, cur, cur_rtl = [], [], None
-    for ch in text:
-        if ch == " ":
-            cur.append(ch)
-            continue
-        rtl = _is_arabic_char(ch)
-        if cur_rtl is None or rtl == cur_rtl:
-            cur.append(ch)
-            cur_rtl = rtl
-        else:
-            out.append(("".join(cur), cur_rtl))
-            cur, cur_rtl = [ch], rtl
-    if cur:
-        out.append(("".join(cur), cur_rtl if cur_rtl is not None else True))
+    out, last = [], 0
+    for m in _LTR_SEG_RE.finditer(text):
+        if m.start() > last:
+            out.append((text[last:m.start()], True))   # RTL gap (brackets, Arabic, neutrals)
+        out.append((m.group(0), False))                 # strongly-LTR segment
+        last = m.end()
+    if last < len(text):
+        out.append((text[last:], True))
     return out
 
 
-# --- run builder with proper RTL + lang per Rule 3 --------------------------
+# --- run builder with proper RTL + lang + font pairing per Rules 3, 9.1 -----
 
-def add_run(p, text, *, rtl, size=11, bold=False, color=None, code=False):
+# Font pairing (Rule 9.1): Latin face on w:ascii/w:hAnsi, Arabic face on w:cs.
+# Traditional Arabic looks much better than Arial for Arabic body text, and
+# Times New Roman pairs cleanly with it for Latin runs. Override per-call with
+# latin_face / cs_face if you need a different stack.
+_DEFAULT_LATIN = "Times New Roman"
+_DEFAULT_CS = "Traditional Arabic"
+_CODE_FACE = "Consolas"
+
+
+def _set_run_fonts(rPr, latin_face, cs_face):
+    """Write <w:rFonts w:ascii w:hAnsi w:cs/> directly. python-docx's
+    r.font.name only sets the Latin slots; Rule 9.1 needs w:cs too."""
+    for old in rPr.findall(qn("w:rFonts")):
+        rPr.remove(old)
+    rf = OxmlElement("w:rFonts")
+    rf.set(qn("w:ascii"), latin_face)
+    rf.set(qn("w:hAnsi"), latin_face)
+    rf.set(qn("w:cs"), cs_face)
+    rPr.append(rf)
+
+
+def add_run(p, text, *, rtl, size=11, bold=False, color=None, code=False,
+            latin_face=None, cs_face=None):
     r = p.add_run(text)
-    r.font.name = "Consolas" if code else "Arial"
     r.font.size = Pt(size)
     r.font.bold = bold
     if color:
         r.font.color.rgb = color
 
     rPr = r._r.get_or_add_rPr()
+
+    # Font pairing (Rule 9.1) — set Latin and complex-script faces independently.
+    if code:
+        _set_run_fonts(rPr, _CODE_FACE, _CODE_FACE)
+    else:
+        _set_run_fonts(rPr, latin_face or _DEFAULT_LATIN, cs_face or _DEFAULT_CS)
+
+    # RTL flag on the run (Rule 3)
     if rtl and rPr.find(qn("w:rtl")) is None:
         rPr.append(OxmlElement("w:rtl"))
 
+    # Language tags (Rule 3) — primary + complex-script
     for old in rPr.findall(qn("w:lang")):
         rPr.remove(old)
     lang = OxmlElement("w:lang")
@@ -145,6 +192,7 @@ def add_run(p, text, *, rtl, size=11, bold=False, color=None, code=False):
     lang.set(qn("w:bidi"), "ar-SA")
     rPr.append(lang)
 
+    # Inline code shading
     if code:
         shd = OxmlElement("w:shd")
         shd.set(qn("w:val"), "clear")
@@ -251,6 +299,9 @@ add_para(doc, "يعتمد تطبيق Claude Desktop على محرك Bun JIT لت
 
 # A clause with Arabic-Indic digits
 add_para(doc, f"راجع البند رقم ({ar_num(4)}) من وثيقة المتطلبات.")
+
+# Rule 7.5 demo — brackets stay in the RTL run; the range stays as ONE LTR run
+add_para(doc, "النطاق المعتمد (10 – 19) أو (20 فأكثر).")
 
 # Pure-LTR code block
 add_code_block(doc, r"C:\Users\me\AppData\claude\claude.exe --verbose")
