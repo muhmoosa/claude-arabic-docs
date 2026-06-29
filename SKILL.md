@@ -195,6 +195,22 @@ In `docx-js`:
 
 For an IBAN, email, URL, or English name embedded in an Arabic paragraph, *split it into its own run* and leave that run's `rightToLeft` flag **off**. Otherwise the digit order can flip. For an entire cell that's LTR (e.g., a cell that contains only an IBAN), set the paragraph's `bidirectional: false` and the run's `rightToLeft: false`, and use `AlignmentType.LEFT`.
 
+### 7.5. Brackets and neutrals must stay in the RTL run (the bracket-breaking trap)
+
+When you isolate an LTR token (number, range, IBAN, English word), isolate **only the strongly-LTR characters**. Do **NOT** pull adjacent parentheses, brackets, quotes, or other bidi-neutral punctuation into the LTR run. A `(` or `)` stranded in an LTR run inside RTL flow gets placed or mirrored on the wrong side — e.g. `(20 فأكثر)` loses its brackets, and `(10 – 19)` flips to `(19 – 10)`. Keep brackets and punctuation in the RTL run so the bidi engine mirrors them, and keep the FULL numeric expression — including internal en-dashes and spaces — together as ONE LTR run so ranges don't reorder.
+
+A segment regex that matches the LTR rule (start on a letter/digit; never include brackets):
+
+```regex
+[A-Za-z0-9](?:[A-Za-z0-9@._\-/:+%,–]|[ ](?=[A-Za-z0-9@._\-/:+%,–]))*
+```
+
+Everything that *doesn't* match (brackets, quotes, Arabic punctuation, Arabic letters) goes into the RTL run. The python-docx template's `split_bidi` is implemented exactly this way — see `references/python-docx-template.md`.
+
+### 7.6. Prefer real runs over directional-isolate characters
+
+U+2066 (LRI) / U+2069 (PDI) also fix mirroring, but **Microsoft Word renders them as missing-glyph boxes in many fonts.** For `.docx`, split into real LTR/RTL runs instead of embedding isolate characters. Isolates are fine for plain-text/HTML output (chat, web) where they're zero-width — but inside Office documents, use runs.
+
 ### 8. Numbers and punctuation
 
 **Punctuation.** In Arabic prose, use Arabic punctuation, not Latin:
@@ -233,6 +249,16 @@ Some Gulf documents use Western digits throughout for executive/financial report
 Default to **Arial** for portability — it ships with every Office install and renders Arabic correctly. Other safe choices: **Calibri**, **Tahoma**, **Sakkal Majalla** (Word default for Arabic), **Traditional Arabic** for body, **Amiri** for literary work. Avoid fonts with no `Arabic` block (e.g., Times New Roman renders Arabic, but loses some shaping nuance).
 
 Always specify the font on the run (`font: "Arial"`) — relying on document defaults is unreliable across Office versions.
+
+### 9.1. Font pairing
+
+Arial renders Arabic but looks flat. The preferred default is **Traditional Arabic** (or *Sakkal Majalla* / *Amiri*) for Arabic runs and **Times New Roman** for the Latin runs. Per OOXML, the Latin face and the complex-script face are independent slots on the same run — set the Arabic face on `w:cs` and the Latin face on `w:ascii` / `w:hAnsi`:
+
+```xml
+<w:rFonts w:ascii="Times New Roman" w:hAnsi="Times New Roman" w:cs="Traditional Arabic"/>
+```
+
+python-docx's `r.font.name = "…"` only sets the Latin slots; the complex-script slot must be set via direct OOXML. The helper in `references/python-docx-template.md` does this for you.
 
 ### 10. Dates
 

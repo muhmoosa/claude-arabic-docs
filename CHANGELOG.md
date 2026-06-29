@@ -5,6 +5,30 @@ a real Arabic Word document, and a human had to manually correct it in MS Word.
 Diffing the manually-fixed file against the programmatically-generated one
 revealed the missing piece. Each rule is documented in detail in `SKILL.md`.
 
+## v1.2.0 — 2026-05-22
+
+Follow-up after a real failure case where the v1.1.x helper produced
+"`(20 فأكثر)`" → "20 فأكثر" with the brackets dropped, and "`(10 – 19)`" →
+"`(19 – 10)`" with the range reversed. Root cause: the helper's `split_bidi`
+pulled adjacent neutrals (parentheses, brackets, quotes) into the LTR run,
+which left them stranded in RTL flow and let Word place/mirror them on the
+wrong side. This release fixes that and adds two more rules surfaced by the
+same failure.
+
+### Added
+
+| Area | Change |
+|---|---|
+| `SKILL.md` | New **Rule 7.5 — Brackets and neutrals must stay in the RTL run** (the bracket-breaking trap). Includes the LTR-segment regex that defines a "strongly-LTR" token. |
+| `SKILL.md` | New **Rule 7.6 — Prefer real runs over directional-isolate characters** (U+2066/U+2069 render as missing-glyph boxes in many Word fonts). |
+| `SKILL.md` | New **Rule 9.1 — Font pairing**: Traditional Arabic for `w:cs`, Times New Roman for `w:ascii`/`w:hAnsi`, set as independent slots on the same run. |
+
+### Changed
+
+- `references/python-docx-template.md`: `split_bidi` rewritten using the Rule-7.5 segment regex. Brackets, quotes, currency symbols, and other neutrals now stay in the RTL run by construction; entire numeric expressions (including internal en-dashes) stay as one LTR run. The bracket-trap regression is now impossible to reproduce with this helper.
+- `references/python-docx-template.md`: `add_run` now writes `<w:rFonts>` directly with `w:ascii`/`w:hAnsi`=Times New Roman and `w:cs`=Traditional Arabic per Rule 9.1, with `latin_face` / `cs_face` kwargs to override. Default is no longer Arial.
+- Worked example: added a Rule 7.5 demo line so the produced sample document exercises the bracket case.
+
 ## v1.1.1 — 2026-05-22
 
 Renamed the skill's `name:` field from `claude-arabic-docs` to `arabic-rtl-docs`:
