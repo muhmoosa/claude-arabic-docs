@@ -31,6 +31,11 @@ until it runs.
 - The RTL character class uses `\u` escapes. A copy that lost the invisible U+FEFF turned the class end into a literal `-`, marking every hyphenated English line RTL.
 - Skill scope narrowed to `.docx` and PDF; `.pptx`/`.xlsx` were mentioned but had no guidance.
 - Rules 7.5 (brackets stay in the RTL run) and 7.6 (no isolate characters) kept, in condensed form, as content rule 6.
+- Google Docs uses only the `ascii`/`hAnsi` font, ignoring `w:cs` (tested with Noto Naskh Arabic, Amiri, IBM Plex Sans Arabic, Cairo, Tajawal). Rule 8 now says to put the same face in all three slots, and the script warns when the Arabic face is only in `cs`. Arial stays the default; Google fonts render in Word only where installed.
+
+### Verified
+
+Hardened test documents checked in Microsoft Word on Mac and Windows, in Google Docs (heading, body, table column order, bullets, English line, IBAN line, bold/size on Arabic) and in LibreOffice PDF export on Linux. The unhardened python-docx version of the same file was broken in Google Docs (LTR heading and IBAN line, reversed table, bullets on the left).
 
 ## v1.2.0 — 2026-05-22
 
