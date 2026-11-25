@@ -157,6 +157,10 @@ def fix_content(root, log, warn, name):
         n['cs'] += bool(mirror_cs(rpr))
         short = txt.strip()[:40]
         if LATIN.search(txt): warn.add(f'{name}: run mixes RTL and Latin letters (split the Latin token into its own non-rtl run): "{short}"')
+        fonts = rpr.find(q('rFonts'))
+        if fonts is not None and fonts.get(q('cs')) and fonts.get(q('ascii')) and fonts.get(q('cs')) != fonts.get(q('ascii')):
+            warn.add(f'{name}: Arabic font {fonts.get(q("cs"))!r} is only in the cs slot; Google Docs will show '
+                     f'{fonts.get(q("ascii"))!r}. Put the same face in ascii/hAnsi/cs if Google Docs readers matter')
         if re.search(r'[,;?]\s*$', txt): warn.add(f'{name}: RTL run ends in Latin , ; or ? (use ، ؛ ؟): "{short}"')
     for t in root.iter(q('t')):
         if t.text and ISOLATES.search(t.text):
