@@ -30,21 +30,23 @@ When Claude is generating a `.docx` (or a PDF) that contains Arabic, Hebrew, Per
 
 ## Installation
 
-### Cowork (Claude desktop app)
+Every release on the [Releases page](https://github.com/muhmoosa/claude-arabic-docs/releases/latest) has a ready-made `arabic-rtl-docs.skill`. This link always gives you the newest version:
 
-1. Download [`claude-arabic-docs.skill`](./claude-arabic-docs.skill) (or build it: see "Building from source" below).
-2. In Cowork: click the skills picker → Install Skill → choose the `.skill` file.
+**[⬇ Download arabic-rtl-docs.skill](https://github.com/muhmoosa/claude-arabic-docs/releases/latest/download/arabic-rtl-docs.skill)**
+
+### Claude app (web, desktop and Cowork)
+
+1. Download the `.skill` file from the link above.
+2. In Claude, open the Skills settings and upload the file. If an older version is installed, remove it first so only one copy is active.
 
 ### Claude Code (CLI)
 
 ```bash
-# Place the skill folder under your Claude Code skills path
-cp -r claude-arabic-docs ~/.claude/skills/
+curl -fL -o /tmp/arabic-rtl-docs.skill https://github.com/muhmoosa/claude-arabic-docs/releases/latest/download/arabic-rtl-docs.skill
+unzip -o /tmp/arabic-rtl-docs.skill -d ~/.claude/skills/   # installs to ~/.claude/skills/arabic-rtl-docs
 ```
 
-### Claude.ai (web)
-
-Skills are not yet installable via the web UI as of this writing. Use Cowork or Claude Code.
+To update, run the same two commands again; `unzip -o` replaces the old files.
 
 ## Usage
 
@@ -123,14 +125,15 @@ claude-arabic-docs/
 ## Building from source
 
 ```bash
-git clone https://github.com/<your-username>/claude-arabic-docs
+git clone https://github.com/muhmoosa/claude-arabic-docs
 cd claude-arabic-docs
 
-# Pack the .skill file (it's a plain ZIP with the SKILL.md, scripts, and references)
-python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
+# Pack the .skill file: a plain ZIP holding an arabic-rtl-docs/ folder with SKILL.md, scripts and references
+mkdir -p build/arabic-rtl-docs && cp -R SKILL.md scripts references build/arabic-rtl-docs/
+(cd build && zip -qr ../arabic-rtl-docs.skill arabic-rtl-docs)
 
 # Test that the hardening script runs
-python scripts/harden_rtl.py examples/sample-output.docx --check
+python3 scripts/harden_rtl.py examples/sample-output.docx --check
 ```
 
 ## Testing
@@ -139,7 +142,7 @@ After making changes to the hardening script, regenerate the example and confirm
 
 ```bash
 node examples/build_test_arabic.js
-python scripts/harden_rtl.py examples/sample-output.docx --check
+python3 scripts/harden_rtl.py examples/sample-output.docx --check
 # Second run with --check must print "clean" (the script is idempotent)
 ```
 
