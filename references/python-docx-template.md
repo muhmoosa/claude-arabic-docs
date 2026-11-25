@@ -20,7 +20,7 @@ bidi).
 """arabic-rtl-docs — python-docx helper layer.
 
 Encodes SKILL.md rules 1-9.1 so the caller writes natural prose and gets
-correct OOXML. After saving, ALWAYS run:  python harden_rtl.py out.docx
+correct OOXML. After saving, ALWAYS run:  python3 scripts/harden_rtl.py out.docx
 
 Key behaviors:
   * split_bidi follows Rule 7.5 — brackets, parens, and quotes stay in the RTL
@@ -42,7 +42,7 @@ Usage:
     make_table_rtl(t)
     fill_cell(t.rows[0].cells[0], "البند")
     doc.save("out.docx")
-    # then: python harden_rtl.py out.docx --validate
+    # then: python3 scripts/harden_rtl.py out.docx --check
 """
 
 import re
@@ -321,9 +321,9 @@ does **not** write the document-level identity that MS Word checks
 validate:
 
 ```bash
-python harden_rtl.py out.docx            # backfill structural RTL (themeFontLang, docDefaults, sectPr)
-python harden_rtl.py out.docx --validate # confirm no content-level rule slipped through
+python3 scripts/harden_rtl.py out.docx            # backfill structural RTL (themeFontLang, docDefaults, sectPr)
+python3 scripts/harden_rtl.py out.docx --check    # must print "clean"; read any warn: lines
 ```
 
-A clean `--validate` run (0 errors) plus a known-good layout means the document
+A `clean` result from `--check` plus a known-good layout means the document
 will render correctly in Microsoft Word, not just in a LibreOffice PDF preview.

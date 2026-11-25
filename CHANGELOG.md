@@ -5,6 +5,33 @@ a real Arabic Word document, and a human had to manually correct it in MS Word.
 Diffing the manually-fixed file against the programmatically-generated one
 revealed the missing piece. Each rule is documented in detail in `SKILL.md`.
 
+## v2.0.0 — 2026-11-25
+
+Rewrite focused on `.docx` and PDF across Word (Windows and Mac), Google Docs and
+LibreOffice on Linux, and on token cost: `SKILL.md` goes from ~25 KB to ~9 KB, and the
+hardening script is no longer pasted into it (Claude used to read it and then write it
+out to `/tmp` on every use). It now ships as `scripts/harden_rtl.py` and costs nothing
+until it runs.
+
+### Added
+
+| Area | Change |
+|---|---|
+| Google Docs | `pPrDefault` and every paragraph style get logical `jc="start"`; an inherited `right` is what made Google Docs show RTL paragraphs on the left. |
+| Word / PDF | **Complex-script properties.** `b`/`i`/`sz` are mirrored to `bCs`/`iCs`/`szCs` and `rFonts w:cs` is filled. python-docx writes only the Latin slots, so Arabic lost bold, size and font in Word and in LibreOffice PDFs (verified: DejaVu Sans regular before, Amiri Bold after). |
+| LTR lines | Latin-only paragraphs get `<w:bidi w:val="0"/>`; with RTL defaults they otherwise inherit RTL and right-align. |
+| Schema order | `pPr`, `rPr`, `sectPr`, `tblPr` are re-sorted; Word silently ignores out-of-order children. |
+| Coverage | Footnotes and endnotes are processed too. |
+| Warnings | `warn:` lines (never fail `--check`) for runs mixing Arabic and Latin letters, Arabic runs ending in Latin `,;?`, bidi control characters, and Windows-only fonts. |
+| `SKILL.md` | New PDF section (export paths, Linux fonts, `pdffonts` check, HTML-to-PDF, ReportLab cannot shape Arabic) and a font-by-platform table. |
+
+### Changed
+
+- CLI is now `harden_rtl.py in.docx [out.docx] [--lang ar-SA] [--check]`; `--report`, `--validate`, `--fix-jc` and `--locale` are gone (fixing is the default, `--check` replaces validate).
+- The RTL character class uses `\u` escapes. A copy that lost the invisible U+FEFF turned the class end into a literal `-`, marking every hyphenated English line RTL.
+- Skill scope narrowed to `.docx` and PDF; `.pptx`/`.xlsx` were mentioned but had no guidance.
+- Rules 7.5 (brackets stay in the RTL run) and 7.6 (no isolate characters) kept, in condensed form, as content rule 6.
+
 ## v1.2.0 — 2026-05-22
 
 Follow-up after a real failure case where the v1.1.x helper produced
