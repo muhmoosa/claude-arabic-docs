@@ -22,7 +22,7 @@ This skill packages all six of those fixes — discovered the hard way over many
 
 ## What it does
 
-When Claude is generating a `.docx` (or `.pptx` / `.xlsx`) that contains Arabic, Hebrew, Persian, Urdu, or any RTL script, this skill makes Claude:
+When Claude is generating a `.docx` (or a PDF) that contains Arabic, Hebrew, Persian, Urdu, or any RTL script, this skill makes Claude:
 
 1. Use logical (`start`/`end`) alignment instead of physical (`left`/`right`) in generation.
 2. Inject the **six RTL layers** Word actually checks (full table below).
@@ -50,32 +50,28 @@ Skills are not yet installable via the web UI as of this writing. Use Cowork or 
 
 Once installed, the skill triggers automatically whenever Claude detects an Arabic / RTL request. No manual invocation needed. If you want to be explicit:
 
-> "Make me an Arabic Word document about X, and use the claude-arabic-docs skill."
+> "Make me an Arabic Word document about X, and use the arabic-rtl-docs skill."
 
 If you're using the bundled scripts manually:
 
 ```bash
-# Harden any existing .docx (in place)
-python scripts/harden_rtl.py document.docx
+# Harden any .docx (in place, or into a second file)
+python3 scripts/harden_rtl.py document.docx
+python3 scripts/harden_rtl.py input.docx output.docx
 
-# Or to a different file
-python scripts/harden_rtl.py input.docx -o output.docx
+# Check only: lists what would change, exits 1 unless clean. "warn:" lines are content issues
+# (mixed Arabic/Latin runs, Latin punctuation, Windows-only fonts) and never fail the check.
+python3 scripts/harden_rtl.py document.docx --check
 
-# Verbose report of what changed
-python scripts/harden_rtl.py document.docx --report
+# Another RTL locale
+python3 scripts/harden_rtl.py document.docx --lang he-IL   # Hebrew
+python3 scripts/harden_rtl.py document.docx --lang fa-IR   # Persian
 
-# Validate content-level RTL rules — exit 1 on errors (catches jc=right, mixed runs, etc.)
-python scripts/harden_rtl.py document.docx --validate
-
-# Validate and auto-rewrite jc="right" → "start" where it's unambiguously safe
-python scripts/harden_rtl.py document.docx --validate --fix-jc
-
-# Use a different RTL locale
-python scripts/harden_rtl.py document.docx --locale he-IL   # Hebrew
-python scripts/harden_rtl.py document.docx --locale fa-IR   # Persian
+# PDF from the hardened file (fonts must be installed: fc-list :lang=ar family)
+soffice --headless --convert-to pdf document.docx
 
 # Convert digits and punctuation in Arabic text (stdin → stdout)
-echo "بمبلغ 375,000 ريال (15%)" | python scripts/arabic_numerals.py
+echo "بمبلغ 375,000 ريال (15%)" | python3 scripts/arabic_numerals.py
 # → "بمبلغ ٣٧٥٬٠٠٠ ريال (١٥٪)"
 ```
 
@@ -109,13 +105,13 @@ Other RTL scripts (Syriac, Thaana, NKo, Mandaic, Samaritan) are detected by Unic
 
 ```
 claude-arabic-docs/
-├── SKILL.md                       Full rule catalog with rationale (read this)
+├── SKILL.md                       The skill: rules, PDF and verification (read this)
 ├── README.md                      You are here
 ├── README.ar.md                   Arabic version of this README
 ├── LICENSE                        MIT
 ├── CHANGELOG.md                   Discovery history of each rule
 ├── scripts/
-│   ├── harden_rtl.py              Post-process any .docx — apply all 6 layers + --validate
+│   ├── harden_rtl.py              Fix or --check any .docx (structure, complex-script props, schema order)
 │   └── arabic_numerals.py         Convert Western digits + Latin punct to Arabic forms
 ├── references/
 │   └── python-docx-template.md    Known-good python-docx helper layer (rules 1–8 by construction)
@@ -134,7 +130,7 @@ cd claude-arabic-docs
 python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
 
 # Test that the hardening script runs
-python scripts/harden_rtl.py examples/sample-output.docx --report
+python scripts/harden_rtl.py examples/sample-output.docx --check
 ```
 
 ## Testing
@@ -143,9 +139,8 @@ After making changes to the hardening script, regenerate the example and confirm
 
 ```bash
 node examples/build_test_arabic.js
-python scripts/harden_rtl.py examples/sample-output.docx --report
-# Expected: docDefaults, pPrDefault, themeFontLang, section bidi all add 1
-# Second pass: all 0 (idempotent)
+python scripts/harden_rtl.py examples/sample-output.docx --check
+# Second run with --check must print "clean" (the script is idempotent)
 ```
 
 ## Acknowledgements

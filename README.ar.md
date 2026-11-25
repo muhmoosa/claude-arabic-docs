@@ -22,7 +22,7 @@
 
 ## ما الذي تفعله
 
-عندما يُولِّد Claude مستنداً بصيغة `.docx` (أو `.pptx` / `.xlsx`) يحتوي على عربية أو عبرية أو فارسية أو أردية أو أيِّ سكربتٍ يُكتب من اليمين لليسار، تَجعل هذه الإضافة Claude يقوم بـ:
+عندما يُولِّد Claude مستنداً بصيغة `.docx` (أو PDF) يحتوي على عربية أو عبرية أو فارسية أو أردية أو أيِّ سكربتٍ يُكتب من اليمين لليسار، تَجعل هذه الإضافة Claude يقوم بـ:
 
 1. استخدام المحاذاة المنطقية (`start`/`end`) بدل الفيزيائية (`left`/`right`) في التوليد.
 2. حقن **الطبقات الست** الفعليَّة التي يفحصها Word (الجدول الكامل أدناه).
@@ -50,32 +50,28 @@ cp -r claude-arabic-docs ~/.claude/skills/
 
 بعد التثبيت، تَنشَط الإضافة تلقائياً عند رصد Claude لأي طلبٍ يتعلَّق بمستندٍ عربي/RTL. لا حاجة لاستدعاءٍ يدوي. إن أردت أن تكون صريحاً:
 
-> "أنشئ لي مستند Word عربياً عن كذا، واستخدم إضافة claude-arabic-docs."
+> "أنشئ لي مستند Word عربياً عن كذا، واستخدم إضافة arabic-rtl-docs."
 
 إن أردت تشغيل السكربتات المضمَّنة يدوياً:
 
 ```bash
-# تقوية أي ملف .docx موجود (في مكانه)
-python scripts/harden_rtl.py document.docx
+# معالجة أي ملف .docx (في مكانه، أو إلى ملف ثانٍ)
+python3 scripts/harden_rtl.py document.docx
+python3 scripts/harden_rtl.py input.docx output.docx
 
-# أو إلى ملف مختلف
-python scripts/harden_rtl.py input.docx -o output.docx
+# فحص فقط: يسرد ما سيتغيّر ويخرج بالرمز 1 ما لم يكن الملف سليماً. أسطر "warn:" تنبيهات على المحتوى
+# (مقاطع تخلط العربية باللاتينية، ترقيم لاتيني، خطوط خاصة بويندوز) ولا تُفشل الفحص.
+python3 scripts/harden_rtl.py document.docx --check
 
-# تقرير مفصَّل عمَّا تغيَّر
-python scripts/harden_rtl.py document.docx --report
+# لغة RTL أخرى
+python3 scripts/harden_rtl.py document.docx --lang he-IL   # عبرية
+python3 scripts/harden_rtl.py document.docx --lang fa-IR   # فارسية
 
-# فحص قواعد RTL على مستوى المحتوى — يُنهي بالرمز 1 عند وجود أخطاء
-python scripts/harden_rtl.py document.docx --validate
+# ملف PDF من الملف المُعالَج (يجب تثبيت الخطوط: fc-list :lang=ar family)
+soffice --headless --convert-to pdf document.docx
 
-# الفحص مع إعادة كتابة jc="right" إلى "start" حيث يكون ذلك آمناً بلا لبس
-python scripts/harden_rtl.py document.docx --validate --fix-jc
-
-# لغة RTL مختلفة
-python scripts/harden_rtl.py document.docx --locale he-IL   # عبرية
-python scripts/harden_rtl.py document.docx --locale fa-IR   # فارسية
-
-# تحويل الأرقام والترقيم في نصٍّ عربي
-echo "بمبلغ 375,000 ريال (15%)" | python scripts/arabic_numerals.py
+# تحويل الأرقام والترقيم في النص العربي (من stdin إلى stdout)
+echo "بمبلغ 375,000 ريال (15%)" | python3 scripts/arabic_numerals.py
 # → "بمبلغ ٣٧٥٬٠٠٠ ريال (١٥٪)"
 ```
 
@@ -115,7 +111,7 @@ claude-arabic-docs/
 ├── LICENSE                        MIT
 ├── CHANGELOG.md                   تاريخ اكتشاف كل قاعدة
 ├── scripts/
-│   ├── harden_rtl.py              معالجة لاحقة لأي .docx — تطبق الطبقات الست + وضع الفحص --validate
+│   ├── harden_rtl.py              إصلاح أي .docx أو فحصه بـ --check
 │   └── arabic_numerals.py         تحويل الأرقام الغربية والترقيم اللاتيني إلى صيغ عربية
 ├── references/
 │   └── python-docx-template.md    طبقة مساعِدة جاهزة لـ python-docx (تُطبّق القواعد ١–٨ بالبناء)
@@ -134,7 +130,7 @@ cd claude-arabic-docs
 python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
 
 # اختبار تشغيل سكربت التقوية
-python scripts/harden_rtl.py examples/sample-output.docx --report
+python scripts/harden_rtl.py examples/sample-output.docx --check
 ```
 
 ## الترخيص
