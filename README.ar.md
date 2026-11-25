@@ -30,21 +30,23 @@
 
 ## التثبيت
 
-### Cowork (تطبيق Claude لسطح المكتب)
+كل إصدار في [صفحة الإصدارات](https://github.com/muhmoosa/claude-arabic-docs/releases/latest) يحتوي ملف `arabic-rtl-docs.skill` جاهزاً. هذا الرابط يعطيك أحدث نسخة دائماً:
 
-1. نزِّل [`claude-arabic-docs.skill`](./claude-arabic-docs.skill) (أو ابنِه: راجع "البناء من المصدر" أدناه).
-2. في Cowork: انقر منتقي الإضافات ← تثبيت إضافة ← اختر ملف `.skill`.
+**[⬇ تنزيل arabic-rtl-docs.skill](https://github.com/muhmoosa/claude-arabic-docs/releases/latest/download/arabic-rtl-docs.skill)**
+
+### تطبيق Claude (الويب وسطح المكتب وCowork)
+
+1. نزِّل ملف `.skill` من الرابط أعلاه.
+2. في Claude، افتح إعدادات المهارات (Skills) وارفع الملف. إن كانت نسخة أقدم مثبّتة فاحذفها أولاً حتى لا تعمل إلا نسخة واحدة.
 
 ### Claude Code (واجهة الأوامر)
 
 ```bash
-# انسخ مجلد الإضافة إلى مسار إضافات Claude Code
-cp -r claude-arabic-docs ~/.claude/skills/
+curl -fL -o /tmp/arabic-rtl-docs.skill https://github.com/muhmoosa/claude-arabic-docs/releases/latest/download/arabic-rtl-docs.skill
+unzip -o /tmp/arabic-rtl-docs.skill -d ~/.claude/skills/   # يُثبَّت في ~/.claude/skills/arabic-rtl-docs
 ```
 
-### Claude.ai (الويب)
-
-الإضافات حالياً غير قابلة للتثبيت عبر واجهة الويب. استخدم Cowork أو Claude Code.
+للتحديث، أعد تشغيل الأمرين نفسيهما؛ الخيار `unzip -o` يستبدل الملفات القديمة.
 
 ## الاستخدام
 
@@ -123,14 +125,15 @@ claude-arabic-docs/
 ## البناء من المصدر
 
 ```bash
-git clone https://github.com/<your-username>/claude-arabic-docs
+git clone https://github.com/muhmoosa/claude-arabic-docs
 cd claude-arabic-docs
 
-# حزم ملف .skill (هو فقط ZIP عادي يحتوي SKILL.md والسكربتات والمراجع)
-python -m zipfile -c claude-arabic-docs.skill SKILL.md scripts/ references/
+# حزم ملف .skill: ملف ZIP عادي يحتوي مجلد arabic-rtl-docs/ وفيه SKILL.md والسكربتات والمراجع
+mkdir -p build/arabic-rtl-docs && cp -R SKILL.md scripts references build/arabic-rtl-docs/
+(cd build && zip -qr ../arabic-rtl-docs.skill arabic-rtl-docs)
 
 # اختبار تشغيل سكربت التقوية
-python scripts/harden_rtl.py examples/sample-output.docx --check
+python3 scripts/harden_rtl.py examples/sample-output.docx --check
 ```
 
 ## الترخيص
